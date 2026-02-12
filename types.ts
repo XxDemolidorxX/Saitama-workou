@@ -5,26 +5,11 @@ export enum WorkoutStatus {
   NAO_FIZ = 'NAO_FIZ'
 }
 
-export interface CharacterConfig {
-  gender: 'male' | 'female';
-  skinTone: string;
-  hairStyle: string;
-  hairColor: string;
-  underwearColor: 'black' | 'white';
-  equippedItems: {
-    torso?: string;
-    legs?: string;
-  };
-}
-
 export interface ShopItem {
   id: string;
   name: string;
-  category: 'anime' | 'times' | 'comum';
   price: number;
-  gender: 'male' | 'female' | 'both';
-  type: 'torso' | 'legs';
-  color: string;
+  category: 'anime' | 'original' | 'premium';
 }
 
 export interface WorkoutEntry {
@@ -45,10 +30,10 @@ export interface UserProfile {
   photo: string;
   saitamaCode: string;
   totalWorkouts: number;
-  character?: CharacterConfig;
+  currentAvatarId: string; // Changed from CharacterConfig object to a simple ID
   xp: number;
   coins: number;
-  inventory: string[]; // IDs of purchased ShopItems
+  inventory: string[]; // List of owned Avatar IDs
 }
 
 export interface Friend {

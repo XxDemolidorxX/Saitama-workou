@@ -1,18 +1,21 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserProfile, Friend, RankEntry, CharacterConfig, ShopItem } from '../types';
+import { UserProfile, Friend, RankEntry, ShopItem } from '../types';
 
 interface AuthContextType {
   user: UserProfile | null;
   friends: Friend[];
   leaderboard: RankEntry[];
-  login: () => void;
+  showLoginModal: boolean;
+  openLogin: () => void;
+  closeLogin: () => void;
+  performLogin: (selectedEmail: string, selectedName: string, photo: string) => void;
   logout: () => void;
   addFriend: (code: string) => boolean;
-  updateCharacter: (config: CharacterConfig) => void;
+  setAvatar: (avatarId: string) => void;
+  updateName: (newName: string) => { success: boolean, message: string };
   addXP: (amount: number) => void;
   buyItem: (item: ShopItem) => boolean;
-  equipItem: (item: ShopItem) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,12 +23,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
-  const [leaderboard] = useState<RankEntry[]>([
-    { id: '1', name: 'Genos', totalWorkouts: 342, photo: 'https://i.pravatar.cc/150?u=genos' },
-    { id: '2', name: 'Mumen Rider', totalWorkouts: 215, photo: 'https://i.pravatar.cc/150?u=mumen' },
-    { id: '3', name: 'King', totalWorkouts: 1, photo: 'https://i.pravatar.cc/150?u=king' },
-    { id: '4', name: 'Bang', totalWorkouts: 180, photo: 'https://i.pravatar.cc/150?u=bang' },
+  // Mock data representing a database
+  const [leaderboard, setLeaderboard] = useState<RankEntry[]>([
+    { id: '1', name: 'Goku_Shape', totalWorkouts: 9001, photo: 'https://i.pravatar.cc/150?u=goku' },
+    { id: '2', name: 'Vegeta_Orgulhoso', totalWorkouts: 8999, photo: 'https://i.pravatar.cc/150?u=vegeta' },
+    { id: '3', name: 'Luffy_G5', totalWorkouts: 500, photo: 'https://i.pravatar.cc/150?u=luffy' },
+    { id: '4', name: 'Naruto_Fit', totalWorkouts: 450, photo: 'https://i.pravatar.cc/150?u=naruto' },
   ]);
 
   useEffect(() => {
@@ -35,29 +40,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedFriends) setFriends(JSON.parse(savedFriends));
   }, []);
 
-  const login = () => {
+  const openLogin = () => setShowLoginModal(true);
+  const closeLogin = () => setShowLoginModal(false);
+
+  const performLogin = (selectedEmail: string, selectedName: string, photo: string) => {
     const randomCode = 'SAI-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    let finalName = selectedName.split(' ')[0];
+    if (leaderboard.some(l => l.name === finalName)) {
+        finalName = `${finalName}_${Math.floor(Math.random() * 99)}`;
+    }
+
     const newUser: UserProfile = {
       id: crypto.randomUUID(),
-      name: "Saitama Apprentice",
-      email: "herofun@gmail.com",
-      photo: "https://i.pravatar.cc/150?u=saitama",
+      name: finalName,
+      email: selectedEmail,
+      photo: photo,
       saitamaCode: randomCode,
       totalWorkouts: 0,
       xp: 0,
-      coins: 500, // Initial balance
-      inventory: [],
-      character: {
-        gender: 'male',
-        skinTone: '#FFE0BD',
-        hairStyle: 'bald',
-        hairColor: '#000000',
-        underwearColor: 'black',
-        equippedItems: {}
-      }
+      coins: 500,
+      inventory: ['default_male', 'default_female'], // Start with defaults
+      currentAvatarId: 'default_male'
     };
     setUser(newUser);
     localStorage.setItem('saitama_user', JSON.stringify(newUser));
+    setShowLoginModal(false);
   };
 
   const logout = () => {
@@ -65,9 +72,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('saitama_user');
   };
 
-  const updateCharacter = (config: CharacterConfig) => {
+  const updateName = (newName: string) => {
+    const cleanName = newName.trim().substring(0, 20);
+    if (!cleanName || cleanName.length < 3) return { success: false, message: "Nome deve ter min 3 letras" };
+    
+    const isTaken = leaderboard.some(entry => entry.name.toLowerCase() === cleanName.toLowerCase());
+    if (isTaken) return { success: false, message: "Este nome já está em uso por outro herói!" };
+
+    if (user) {
+      const updatedUser = { ...user, name: cleanName };
+      setUser(updatedUser);
+      localStorage.setItem('saitama_user', JSON.stringify(updatedUser));
+      return { success: true, message: "Identidade secreta atualizada!" };
+    }
+    return { success: false, message: "Erro ao atualizar" };
+  };
+
+  const setAvatar = (avatarId: string) => {
     if (!user) return;
-    const updatedUser = { ...user, character: config };
+    if (!user.inventory.includes(avatarId)) return; // Security check
+    const updatedUser = { ...user, currentAvatarId: avatarId };
     setUser(updatedUser);
     localStorage.setItem('saitama_user', JSON.stringify(updatedUser));
   };
@@ -80,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     let newCoins = user.coins;
     if (newLevel > oldLevel) {
-      newCoins += (newLevel - oldLevel) * 100; // 100 coins per level
+      newCoins += (newLevel - oldLevel) * 50; 
     }
 
     const updatedUser = { ...user, xp: newXP, coins: newCoins, totalWorkouts: user.totalWorkouts + 1 };
@@ -101,19 +125,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const equipItem = (item: ShopItem) => {
-    if (!user || !user.character) return;
-    const updatedEquipped = { ...user.character.equippedItems, [item.type]: item.id };
-    updateCharacter({ ...user.character, equippedItems: updatedEquipped });
-  };
-
   const addFriend = (code: string) => {
     if (code === user?.saitamaCode) return false;
     if (friends.some(f => f.saitamaCode === code)) return false;
     
     const newFriend: Friend = {
       id: crypto.randomUUID(),
-      name: `Guerreiro ${code.split('-')[1]}`,
+      name: `User_${code.split('-')[1]}`,
       photo: `https://i.pravatar.cc/150?u=${code}`,
       saitamaCode: code,
       isOnline: Math.random() > 0.5,
@@ -132,7 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     : leaderboard.sort((a, b) => b.totalWorkouts - a.totalWorkouts);
 
   return (
-    <AuthContext.Provider value={{ user, friends, leaderboard: sortedLeaderboard, login, logout, addFriend, updateCharacter, addXP, buyItem, equipItem }}>
+    <AuthContext.Provider value={{ user, friends, leaderboard: sortedLeaderboard, showLoginModal, openLogin, closeLogin, performLogin, logout, addFriend, setAvatar, updateName, addXP, buyItem }}>
       {children}
     </AuthContext.Provider>
   );
